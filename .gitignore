@@ -1,0 +1,10 @@
+.env
+/dist
+/venv
+/build
+/.vscode
+/sample_invoices
+InvoiceReader.spec
+invoiceReader.spec
+faktury_data.xlsx
+.~lock.faktury_data.xlsx#
