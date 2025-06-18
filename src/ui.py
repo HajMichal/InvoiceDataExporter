@@ -54,7 +54,7 @@ class ModernPDFProcessor:
                         font=('Segoe UI', 24, 'bold'))
         title.pack()
         
-        subtitle = tk.Label(header_frame, text="Pamiętaj, że aplikacja przetwarza tylko pliki PDF", 
+        subtitle = tk.Label(header_frame, text="Pamiętaj, że aplikacja przetwarza tylko pliki PDF i TIFF", 
                            bg="#1e1e1e", fg="#cccccc", 
                            font=('Segoe UI', 11))
         subtitle.pack(pady=(5, 0))
@@ -73,8 +73,8 @@ class ModernPDFProcessor:
                 font=('Segoe UI', 14, 'bold')).pack(anchor="w")
         
         # Select button
-        select_btn = tk.Button(file_card, text="Wybierz pliki PDF", 
-                              command=self.select_pdfs,
+        select_btn = tk.Button(file_card, text="Wybierz pliki PDF lub TIF", 
+                              command=self.select_files,
                               bg="#0078d4", fg="white", 
                               font=('Segoe UI', 11, 'bold'),
                               relief="flat", cursor="hand2",
@@ -149,7 +149,7 @@ class ModernPDFProcessor:
                                   padx=15, pady=8)
         self.clear_btn.pack(side="left", padx=(0, 10))
         
-        self.process_btn = tk.Button(button_container, text="⚡ Przetwórz PDF'y", 
+        self.process_btn = tk.Button(button_container, text="⚡ Przetwórz pliki", 
                                     command=self.process_pdfs,
                                     bg="#107c10", fg="white", 
                                     font=('Segoe UI', 11, 'bold'),
@@ -157,13 +157,18 @@ class ModernPDFProcessor:
                                     padx=20, pady=10, state="disabled")
         self.process_btn.pack(side="left")
         
-    def select_pdfs(self):
+    def select_files(self):
         if self.is_processing:
             return
             
         files = filedialog.askopenfilenames(
-            title="Wybierz pliki PDF",
-            filetypes=[("Pliki PDF", "*.pdf")]
+            title="Wybierz pliki PDF lub TIF",
+            filetypes=[
+                 ("Wszystkie obsługiwane", "*.pdf *.tif *.tiff"),
+                ("Pliki PDF", "*.pdf"),
+                   ("Pliki TIF", "*.tif *.tiff"),
+                ("Wszystkie pliki", "*.*")
+            ]
         )
         if files:
             self.file_list.delete(0, tk.END)
