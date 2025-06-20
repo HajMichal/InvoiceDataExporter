@@ -3,11 +3,15 @@ from typing import List
 
 from src.core.ai_processor import gather_specific_data
 from src.core.excel_exporter import export_to_excel
+from src.core.get_eur_to_pln_rate import get_eur_to_pln_rate_fallback
 from src.core.ocr import extract_text_from_file
 
 if __name__ == "__main__":
     file_paths = sys.argv[1:]
     all_extracted_text: List[str] = []
+
+    # Fetch current *EurToPln* rate from internet
+    eur_to_pln_rate = get_eur_to_pln_rate_fallback()
 
     for file_path in file_paths:
         try:
@@ -20,6 +24,6 @@ if __name__ == "__main__":
 
     if all_extracted_text:
         gathered_data = gather_specific_data(all_extracted_text)  
-        success = export_to_excel(gathered_data)
+        success = export_to_excel(gathered_data, eur_to_pln_rate)
     else:
         print("No valid files to process.")

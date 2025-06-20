@@ -5,16 +5,20 @@ import os
 import subprocess
 import threading
 
+from src.core.get_eur_to_pln_rate import get_eur_to_pln_rate_fallback
+
 class ModernPDFProcessor:
     def __init__(self):
         self.selected_files = []
         self.is_processing = False
+        self.current_rate = None
         self.setup_ui()
+        self.fetch_current_rate()
         
     def setup_ui(self):
         self.root = tk.Tk()
         self.root.title("Eksporter danych z faktur do Excela")
-        self.root.geometry("700x700")
+        self.root.geometry("800x1000")
         self.root.configure(bg="#1e1e1e")
         
         # Configure modern dark theme
@@ -58,7 +62,45 @@ class ModernPDFProcessor:
                            bg="#1e1e1e", fg="#cccccc", 
                            font=('Segoe UI', 11))
         subtitle.pack(pady=(5, 0))
+    
+    def fetch_current_rate(self):
+        """Fetch current EUR/PLN rate in background"""
+        def fetch_rate():
+            try:
+                rate = get_eur_to_pln_rate_fallback()
+                self.current_rate = rate
+                # Update UI on main thread - THIS is where update_rate_display gets called
+                self.root.after(0, lambda: self.update_rate_display(rate))
+            except Exception as e:
+                print(f"Error fetching rate: {e}")
+                self.current_rate = 4.8
+                self.root.after(0, lambda: self.update_rate_display(4.8))
         
+        # Run in background thread
+        import threading
+        threading.Thread(target=fetch_rate, daemon=True).start()
+
+    def update_rate_display(self, rate):
+        """Update the rate display with current rate"""
+        if hasattr(self, 'rate_display'):
+            self.rate_display.config(text=f"{rate:.4f} PLN")
+            
+            # Update the info label
+            if hasattr(self, 'rate_info_label'):
+                import datetime
+                current_time = datetime.datetime.now().strftime("%H:%M")
+                self.rate_info_label.config(
+                    text=f"Kurs z NBP (Narodowy Bank Polski) - ostatnia aktualizacja: {current_time}"
+                )
+
+    def refresh_exchange_rate(self):
+        """Manually refresh the exchange rate"""
+        if hasattr(self, 'rate_display'):
+            self.rate_display.config(text="Ładowanie...")
+        if hasattr(self, 'rate_info_label'):
+            self.rate_info_label.config(text="Pobieranie aktualnego kursu...")
+        self.fetch_current_rate()
+
     def create_file_section(self):
         # File selection card
         file_card = tk.Frame(self.main_container, bg="#2d2d2d", relief="flat", bd=1)
@@ -125,6 +167,47 @@ class ModernPDFProcessor:
     def create_action_section(self):
         action_frame = tk.Frame(self.main_container, bg="#1e1e1e")
         action_frame.pack(fill="x")
+
+        # Exchange rate display section (read-only)
+        rate_card = tk.Frame(action_frame, bg="#2d2d2d", relief="flat", bd=1)
+        rate_card.pack(fill="x", pady=(0, 20))
+        
+        rate_header = tk.Frame(rate_card, bg="#2d2d2d")
+        rate_header.pack(fill="x", padx=25, pady=(15, 0))
+        
+        tk.Label(rate_header, text="💱 Aktualny kurs EUR → PLN", 
+                bg="#2d2d2d", fg="#ffffff", 
+                font=('Segoe UI', 12, 'bold')).pack(anchor="w")
+        
+        rate_content = tk.Frame(rate_card, bg="#2d2d2d")
+        rate_content.pack(fill="x", padx=25, pady=(10, 15))
+        
+        # Display current rate (read-only)
+        self.rate_display = tk.Label(rate_content, 
+                                    text="Ładowanie kursu...", 
+                                    bg="#1e1e1e", fg="#00ff88",
+                                    font=('Segoe UI', 14, 'bold'),
+                                    relief="flat", bd=5, pady=10)
+        self.rate_display.pack(fill="x", pady=(0, 5))
+        
+        self.rate_info_label = tk.Label(rate_content, 
+                                    text="Pobieranie aktualnego kursu z NBP...", 
+                                    bg="#2d2d2d", fg="#888888", 
+                                    font=('Segoe UI', 9))
+        self.rate_info_label.pack(anchor="w")
+        
+        # Refresh rate button
+        refresh_frame = tk.Frame(rate_content, bg="#2d2d2d")
+        refresh_frame.pack(fill="x", pady=(5, 0))
+        
+        refresh_btn = tk.Button(refresh_frame, text="🔄 Odśwież kurs",
+                            bg="#0078d4", fg="white",
+                            font=('Segoe UI', 9),
+                            relief="flat", bd=0,
+                            padx=10, pady=5,
+                            cursor="hand2",
+                            command=self.refresh_exchange_rate)
+        refresh_btn.pack(anchor="w")
         
         # Status and progress container
         self.status_container = tk.Frame(action_frame, bg="#1e1e1e")
