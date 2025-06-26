@@ -4,11 +4,16 @@ import os
 from openpyxl import load_workbook
 from src.models.CompanyData import CompanyDataModel
 
-def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float, excel_file="faktury_data.xlsx"):
+def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float, excel_file=None):
     """
     Export company data to Excel file without overwriting existing data.
     Each CompanyDataModel field becomes a separate column.
     """
+    
+    # Set default path to Downloads folder if not specified
+    if excel_file is None:
+        downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
+        excel_file = os.path.join(downloads_path, "faktury_data.xlsx")
     # Convert CompanyDataModel objects to dictionaries
     new_data = []
     for company_data in gathered_data:
@@ -19,7 +24,7 @@ def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float
                 pln_netto = euro_netto * eur_to_pln_rate
                 
                 new_data.append({
-                    'Firma': company_data.comapny_name,
+                    'Firma': company_data.company_name,
                     'Numer Faktury': company_data.invoice_id, 
                     'Data': company_data.invoice_date,
                     'Brutto': "",  # Empty for EUR currency
@@ -34,7 +39,7 @@ def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float
                 if(company_data.euro_net_value > 0): euro_netto = round(company_data.euro_net_value, 2)
 
                 new_data.append({
-                    'Firma': company_data.comapny_name,
+                    'Firma': company_data.company_name,
                     'Numer Faktury': company_data.invoice_id, 
                     'Data': company_data.invoice_date,
                     'Brutto': company_data.gross_value,
@@ -77,13 +82,14 @@ def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float
         workbook = load_workbook(excel_file)
         worksheet = workbook.active
         
-        worksheet.column_dimensions['A'].width = 50
-        worksheet.column_dimensions['B'].width = 25
-        worksheet.column_dimensions['C'].width = 15
-        worksheet.column_dimensions['D'].width = 15
-        worksheet.column_dimensions['E'].width = 15
-        worksheet.column_dimensions['F'].width = 10
-        worksheet.column_dimensions['H'].width = 15
+        if worksheet:
+            worksheet.column_dimensions['A'].width = 50
+            worksheet.column_dimensions['B'].width = 25
+            worksheet.column_dimensions['C'].width = 15
+            worksheet.column_dimensions['D'].width = 15
+            worksheet.column_dimensions['E'].width = 15
+            worksheet.column_dimensions['F'].width = 10
+            worksheet.column_dimensions['H'].width = 15
 
         workbook.save(excel_file)
         workbook.close()

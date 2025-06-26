@@ -3,6 +3,8 @@
 /venv
 /build
 /.vscode
+/src/__pycache__
+*/__pycache__
 /sample_invoices
 InvoiceReader.spec
 invoiceReader.spec

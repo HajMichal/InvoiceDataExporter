@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class CompanyDataModel(BaseModel):
-    comapny_name: str           # XYZ Comapny Sp. z o.o.
+    company_name: str           # XYZ Company Sp. z o.o.
     invoice_date: str           # 2024-01-01
     invoice_id: str = ""        # 123/2024  
     gross_value: float          # 1000.00

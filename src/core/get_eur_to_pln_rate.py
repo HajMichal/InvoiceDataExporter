@@ -17,11 +17,11 @@ def get_eur_to_pln_rate() -> Optional[float]:
         data = response.json()
         rate = data['rates'][0]['mid']
         
-        print(f"✓ Pobrano aktualny kurs EUR/PLN: {rate:.4f}")
+        print(f"[OK] Pobrano aktualny kurs EUR/PLN: {rate:.4f}")
         return float(rate)
         
     except Exception as e:
-        print(f"⚠ Nie udało się pobrać kursu EUR/PLN: {e}")
+        print(f"[WARN] Nie udało się pobrać kursu EUR/PLN: {e}")
         return None
 
 
@@ -30,7 +30,7 @@ def get_eur_to_pln_rate_fallback() -> float:
     Try to get current EUR/PLN rate, fallback to multiple sources if primary fails.
     Returns default rate if all sources fail.
     """
-    default_rate = 4.8
+    default_rate = 4.25  # Updated to more current rate (as of 2024)
     
     # Try NBP API first (Polish National Bank - official source)
     rate = get_eur_to_pln_rate()
@@ -46,11 +46,11 @@ def get_eur_to_pln_rate_fallback() -> float:
         data = response.json()
         rate = data['rates']['PLN']
         
-        print(f"✓ Pobrano kurs EUR/PLN z exchangerate-api: {rate:.4f}")
+        print(f"[OK] Pobrano kurs EUR/PLN z exchangerate-api: {rate:.4f}")
         return float(rate)
         
     except Exception as e:
-        print(f"⚠ Backup API też nie działa: {e}")
+        print(f"[WARN] Backup API też nie działa: {e}")
     
     # Last fallback to fixer.io (requires free API key but has free tier)
     try:
@@ -63,11 +63,11 @@ def get_eur_to_pln_rate_fallback() -> float:
             data = response.json()
             if 'rates' in data and 'PLN' in data['rates']:
                 rate = data['rates']['PLN']
-                print(f"✓ Pobrano kurs EUR/PLN z fixer.io: {rate:.4f}")
+                print(f"[OK] Pobrano kurs EUR/PLN z fixer.io: {rate:.4f}")
                 return float(rate)
                 
     except Exception:
         pass
     
-    print(f"⚠ Używam domyślnego kursu EUR/PLN: {default_rate}")
+    print(f"[WARN] Używam domyślnego kursu EUR/PLN: {default_rate}")
     return default_rate

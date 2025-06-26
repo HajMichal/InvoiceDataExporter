@@ -19,7 +19,7 @@ a = Analysis(
         'pandas',
         'openpyxl',
         'pytesseract',
-        'pdf2image',
+        'fitz',
         'PIL',
         'google.genai',
         'pydantic',
@@ -29,7 +29,7 @@ a = Analysis(
         'tkinter.filedialog',
         'tkinter.messagebox',
         'threading',
-        'subprocess'
+        'datetime'
     ],
     hookspath=[],
     hooksconfig={},

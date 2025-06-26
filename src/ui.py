@@ -2,10 +2,13 @@ import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
-import subprocess
 import threading
+import datetime
 
 from src.core.get_eur_to_pln_rate import get_eur_to_pln_rate_fallback
+from src.core.ocr import extract_text_from_file
+from src.core.ai_processor import gather_specific_data
+from src.core.excel_exporter import export_to_excel
 
 class ModernPDFProcessor:
     def __init__(self):
@@ -77,7 +80,6 @@ class ModernPDFProcessor:
                 self.root.after(0, lambda: self.update_rate_display(4.8))
         
         # Run in background thread
-        import threading
         threading.Thread(target=fetch_rate, daemon=True).start()
 
     def update_rate_display(self, rate):
@@ -87,7 +89,6 @@ class ModernPDFProcessor:
             
             # Update the info label
             if hasattr(self, 'rate_info_label'):
-                import datetime
                 current_time = datetime.datetime.now().strftime("%H:%M")
                 self.rate_info_label.config(
                     text=f"Kurs z NBP (Narodowy Bank Polski) - ostatnia aktualizacja: {current_time}"
@@ -289,31 +290,46 @@ class ModernPDFProcessor:
         self.status_container.pack_forget()
         
         # Reset button text and state
-        self.process_btn.config(text="⚡ Eksportuj PDF'y")
+        self.process_btn.config(text="⚡ Przetwórz pliki")
         self.clear_btn.config(state="normal", bg="#404040")
         self.update_process_button()
         
     def process_pdfs_thread(self):
         """Run the actual processing in a separate thread"""
-        # Get the directory where the executable is located
-        if getattr(sys, 'frozen', False):
-            # Running as compiled executable
-            app_dir = os.path.dirname(sys.executable)
-            main_script = os.path.join(app_dir, "main.py")
-        else:
-            # Running as script
-            app_dir = os.path.dirname(os.path.dirname(__file__))
-            main_script = os.path.join(app_dir, "main.py")
-        
-        command = ["python3", main_script] + self.selected_files
-        
         try:
-            result = subprocess.run(command, check=True, capture_output=True, text=True, cwd=app_dir)
-            # Schedule UI updates on main thread
-            self.root.after(0, lambda: self.processing_success(result.stdout))
-        except subprocess.CalledProcessError as e:
-            # Schedule UI updates on main thread
-            self.root.after(0, lambda: self.processing_error(e.stderr))
+            all_extracted_text = []
+            
+            # Process each selected file
+            for file_path in self.selected_files:
+                try:
+                    text = extract_text_from_file(file_path)
+                    clean_text = '\n'.join([line for line in text.split('\n') if line.strip() != ''])
+                    all_extracted_text.append(clean_text)
+                except ValueError as e:
+                    print(f"Error processing {file_path}: {e}")
+                    continue
+            
+            if all_extracted_text:
+                # Gather data using AI processor
+                gathered_data = gather_specific_data(all_extracted_text)  
+                
+                # Use current rate if available, otherwise fallback
+                eur_to_pln_rate = self.current_rate if self.current_rate else get_eur_to_pln_rate_fallback()
+                
+                # Export to Excel
+                success = export_to_excel(gathered_data, eur_to_pln_rate)
+                
+                if success:
+                    result_msg = f"Pomyślnie przetworzono {len(gathered_data)} faktury i wyeksportowano do pliku Excel."
+                    self.root.after(0, lambda: self.processing_success(result_msg))
+                else:
+                    self.root.after(0, lambda: self.processing_error("Błąd podczas eksportowania do pliku Excel"))
+            else:
+                self.root.after(0, lambda: self.processing_error("Nie znaleziono prawidłowych plików do przetworzenia"))
+                
+        except Exception as e:
+            error_msg = f"Błąd podczas przetwarzania: {str(e)}"
+            self.root.after(0, lambda: self.processing_error(error_msg))
             
     def processing_success(self, output):
         self.hide_processing_state()

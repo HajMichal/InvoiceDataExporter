@@ -13,8 +13,12 @@ load_dotenv()
 genai_api_key = os.getenv('GENAI_API_KEY')
 client = genai.Client(api_key=genai_api_key)
 
-def clean_json_response(response_text: str) -> str:
+def clean_json_response(response_text: str | None) -> str:
     """Clean up malformed JSON response from AI"""
+
+    if(response_text is None): 
+         raise ValueError("Coś poszło nie tak z wyciąganiem danych przez AI")
+    
     # Remove excessive whitespace and tab characters
     cleaned = re.sub(r'\\t+', ' ', response_text)  # Replace multiple \t with single space
     cleaned = re.sub(r'\t+', ' ', cleaned)         # Replace actual tabs with space
@@ -66,8 +70,9 @@ def gather_specific_data(invoices_text: List[str]):
             cleaned_response = clean_json_response(response.text)
             data_dict = json.loads(cleaned_response)
 
-            if 'comapny_name' in data_dict and isinstance(data_dict['comapny_name'], str):
-                data_dict['comapny_name'] = re.sub(r'\s+', ' ', data_dict['comapny_name']).strip()
+            # Clean company name if present
+            if 'company_name' in data_dict and isinstance(data_dict['company_name'], str):
+                data_dict['company_name'] = re.sub(r'\s+', ' ', data_dict['company_name']).strip()
            
             # Handle Euro currency logic
             if 'euro_net_value' not in data_dict or data_dict['euro_net_value'] == 0.0:
@@ -86,7 +91,7 @@ def gather_specific_data(invoices_text: List[str]):
             # Try to create a default CompanyDataModel with fallback values
             try:
                 fallback_data = CompanyDataModel(
-                    comapny_name="Błąd danych",
+                    company_name="Błąd danych",
                     invoice_id="",
                     invoice_date="1900-01-01",
                     gross_value=0.0,
