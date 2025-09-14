@@ -4,50 +4,53 @@ import os
 from openpyxl import load_workbook
 from src.models.CompanyData import CompanyDataModel
 
-def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float, excel_file=None):
+def export_to_excel(gathered_data: List[CompanyDataModel], eur_to_pln_rate: float, excel_file=None):
     """
     Export company data to Excel file without overwriting existing data.
-    Each CompanyDataModel field becomes a separate column.
+    Uses the new simplified data model with filename-based company information.
     """
     
     # Set default path to Downloads folder if not specified
     if excel_file is None:
         downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
         excel_file = os.path.join(downloads_path, "faktury_data.xlsx")
+    
     # Convert CompanyDataModel objects to dictionaries
     new_data = []
     for company_data in gathered_data:
         if isinstance(company_data, CompanyDataModel):
+            # Handle EUR currency conversion
             if company_data.currency == "EUR":
-                # For EUR currency, calculate PLN equivalent and leave brutto/VAT empty
-                euro_netto = company_data.euro_net_value if company_data.euro_net_value > 0 else company_data.net_value
-                pln_netto = euro_netto * eur_to_pln_rate
+                # Convert EUR amounts to PLN
+                pln_net = company_data.net_value * eur_to_pln_rate
+                pln_gross = company_data.gross_value * eur_to_pln_rate
+                pln_vat = company_data.vat_value * eur_to_pln_rate
                 
                 new_data.append({
                     'Firma': company_data.company_name,
-                    'Numer Faktury': company_data.invoice_id, 
-                    'Data': company_data.invoice_date,
-                    'Brutto': "",  # Empty for EUR currency
-                    'Netto': round(pln_netto, 2),  # Converted to PLN
-                    'Vat': "",  # Empty for EUR currency
-                    'Waluta': "EUR",
-                    'NettoEUR': round(euro_netto, 2),
-                    'Kraj': company_data.company_country,
+                    'Numer Faktury': company_data.invoice_number,
+                    'Temat': company_data.topic_number,
+                    'Typ': company_data.invoice_type if company_data.invoice_type else "",
+                    'Netto': round(pln_net, 2),  # Converted to PLN
+                    'Brutto': round(pln_gross, 2),  # Converted to PLN
+                    'VAT': round(pln_vat, 2),  # Converted to PLN
+                    'Waluta': company_data.currency,
+                    'Netto EUR': round(company_data.net_value, 2),  # Original EUR amount
+                    'Plik': os.path.basename(company_data.filepath),
                 })
             else:
-                euro_netto = ""
-                if(company_data.euro_net_value > 0): euro_netto = round(company_data.euro_net_value, 2)
-
+                # PLN or other currencies - use original amounts
                 new_data.append({
                     'Firma': company_data.company_name,
-                    'Numer Faktury': company_data.invoice_id, 
-                    'Data': company_data.invoice_date,
-                    'Brutto': company_data.gross_value,
-                    'Netto': company_data.net_value,
-                    'Vat': company_data.tax_value,
+                    'Numer Faktury': company_data.invoice_number,
+                    'Temat': company_data.topic_number,
+                    'Typ': company_data.invoice_type if company_data.invoice_type else "",
+                    'Netto': round(company_data.net_value, 2),
+                    'Brutto': round(company_data.gross_value, 2),
+                    'VAT': round(company_data.vat_value, 2),
                     'Waluta': company_data.currency,
-                    'NettoEUR': euro_netto,
-                    'Kraj': company_data.company_country,
+                    'Netto EUR': "",  # Empty for non-EUR currencies
+                    'Plik': os.path.basename(company_data.filepath),
                 })
         else:
             print(f"Warning: Expected CompanyDataModel but got {type(company_data)}: {company_data}")
@@ -83,13 +86,17 @@ def export_to_excel(gathered_data: List[CompanyDataModel],eur_to_pln_rate: float
         worksheet = workbook.active
         
         if worksheet:
-            worksheet.column_dimensions['A'].width = 50
-            worksheet.column_dimensions['B'].width = 25
-            worksheet.column_dimensions['C'].width = 15
-            worksheet.column_dimensions['D'].width = 15
-            worksheet.column_dimensions['E'].width = 15
-            worksheet.column_dimensions['F'].width = 10
-            worksheet.column_dimensions['H'].width = 15
+            # Set column widths for new structure
+            worksheet.column_dimensions['A'].width = 30  # Firma
+            worksheet.column_dimensions['B'].width = 20  # Numer Faktury
+            worksheet.column_dimensions['C'].width = 15  # Temat
+            worksheet.column_dimensions['D'].width = 10  # Typ
+            worksheet.column_dimensions['E'].width = 15  # Netto
+            worksheet.column_dimensions['F'].width = 15  # Brutto
+            worksheet.column_dimensions['G'].width = 15  # VAT
+            worksheet.column_dimensions['H'].width = 10  # Waluta
+            worksheet.column_dimensions['I'].width = 15  # Netto EUR
+            worksheet.column_dimensions['J'].width = 25  # Plik
 
         workbook.save(excel_file)
         workbook.close()

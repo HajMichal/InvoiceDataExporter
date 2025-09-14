@@ -1,13 +1,19 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class CompanyDataModel(BaseModel):
-    company_name: str           # XYZ Company Sp. z o.o.
-    invoice_date: str           # 2024-01-01
-    invoice_id: str = ""        # 123/2024  
-    gross_value: float          # 1000.00
-    net_value: float            # 800.00
-    tax_value: float            # 200.00
-    euro_net_value: float = 0.0   
-    currency: str = "PLN"  
-    company_country: str = "Polska"
+    # Data extracted from filename
+    company_name: str           # Company name from filename
+    invoice_number: str         # Invoice number from filename
+    topic_number: str           # Topic number from filename  
+    invoice_type: Optional[str] = None  # Optional type from filename
+    
+    # Data extracted from invoice content via AI
+    net_value: float            # Net amount (netto)
+    gross_value: float          # Gross amount (brutto) 
+    vat_value: float            # VAT amount (podatek VAT)
+    
+    # Derived/calculated fields
+    currency: str = "PLN"       # Currency detected from invoice
+    filepath: str = ""          # Original file path for reference

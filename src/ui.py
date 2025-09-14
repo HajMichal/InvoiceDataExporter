@@ -9,6 +9,7 @@ from src.core.get_eur_to_pln_rate import get_eur_to_pln_rate_fallback
 from src.core.ocr import extract_text_from_file
 from src.core.ai_processor import gather_specific_data
 from src.core.excel_exporter import export_to_excel
+from src.core.filename_parser import validate_filename_format, get_display_name_from_filename
 
 class ModernPDFProcessor:
     def __init__(self):
@@ -257,9 +258,36 @@ class ModernPDFProcessor:
         if files:
             self.file_list.delete(0, tk.END)
             self.selected_files.clear()
+            
+            valid_files = []
+            invalid_files = []
+            
             for file in files:
-                self.file_list.insert(tk.END, os.path.basename(file))
-            self.selected_files.extend(files)
+                filename = os.path.basename(file)
+                if validate_filename_format(filename):
+                    # Valid filename format - show parsed info
+                    display_name = get_display_name_from_filename(filename)
+                    self.file_list.insert(tk.END, display_name)
+                    valid_files.append(file)
+                else:
+                    # Invalid filename format - show warning
+                    self.file_list.insert(tk.END, f"⚠️ BŁĄD FORMATU: {filename}")
+                    invalid_files.append(file)
+            
+            self.selected_files.extend(valid_files)
+            
+            # Show warning if there are invalid files
+            if invalid_files:
+                invalid_names = [os.path.basename(f) for f in invalid_files]
+                messagebox.showwarning(
+                    "Nieprawidłowy format plików",
+                    f"Następujące pliki mają nieprawidłowy format nazwy:\n\n" +
+                    "\n".join(invalid_names) + 
+                    f"\n\nOczekiwany format: 'firma numer_faktury numer_tematu typ(opcjonalnie).pdf'\n" +
+                    f"Przykład: 'ABC_Company INV2024001 T001 faktura.pdf'\n\n" +
+                    f"Prawidłowe pliki ({len(valid_files)}) zostały dodane do listy."
+                )
+            
             self.update_process_button()
             
     def update_process_button(self):
@@ -297,21 +325,21 @@ class ModernPDFProcessor:
     def process_pdfs_thread(self):
         """Run the actual processing in a separate thread"""
         try:
-            all_extracted_text = []
+            invoice_data = []
             
-            # Process each selected file
+            # Process each selected file - extract text and pair with filepath
             for file_path in self.selected_files:
                 try:
                     text = extract_text_from_file(file_path)
                     clean_text = '\n'.join([line for line in text.split('\n') if line.strip() != ''])
-                    all_extracted_text.append(clean_text)
+                    invoice_data.append((file_path, clean_text))
                 except ValueError as e:
                     print(f"Error processing {file_path}: {e}")
                     continue
             
-            if all_extracted_text:
-                # Gather data using AI processor
-                gathered_data = gather_specific_data(all_extracted_text)  
+            if invoice_data:
+                # Gather data using AI processor with new structure
+                gathered_data = gather_specific_data(invoice_data)  
                 
                 # Use current rate if available, otherwise fallback
                 eur_to_pln_rate = self.current_rate if self.current_rate else get_eur_to_pln_rate_fallback()

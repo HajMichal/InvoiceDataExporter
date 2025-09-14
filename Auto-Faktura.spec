@@ -15,6 +15,7 @@ a = Analysis(
         'src.core.excel_exporter',
         'src.core.get_eur_to_pln_rate',
         'src.core.ocr',
+        'src.core.filename_parser',
         'src.models.CompanyData',
         'pandas',
         'openpyxl',
@@ -34,7 +35,19 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'torch',
+        'torchvision', 
+        'tensorflow',
+        'scipy',
+        'matplotlib',
+        'jupyter',
+        'IPython',
+        'notebook',
+        'sympy',
+        'sklearn',
+        'cv2'
+    ],
     noarchive=False,
     optimize=0,
 )

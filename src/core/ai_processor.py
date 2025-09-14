@@ -1,17 +1,27 @@
 import os
 import re
 import json
-from typing import List
+from typing import List, Tuple
 from google import genai
 from dotenv import load_dotenv
 
 from src.models.CompanyData import CompanyDataModel
+from src.core.filename_parser import parse_invoice_filename
+from pydantic import BaseModel
 
 # Load environment variables from .env file
 load_dotenv()
 
 genai_api_key = os.getenv('GENAI_API_KEY')
 client = genai.Client(api_key=genai_api_key)
+
+
+class InvoiceAmountsModel(BaseModel):
+    """Simplified model for AI to extract only financial amounts from invoice content"""
+    net_value: float      # Net amount (netto)
+    gross_value: float    # Gross amount (brutto)
+    vat_value: float      # VAT amount (podatek VAT)
+    currency: str = "PLN" # Currency (PLN, EUR, USD, etc.)
 
 def clean_json_response(response_text: str | None) -> str:
     """Clean up malformed JSON response from AI"""
@@ -30,80 +40,131 @@ def clean_json_response(response_text: str | None) -> str:
     
     return cleaned.strip()
 
-def gather_specific_data(invoices_text: List[str]):
-    gathered_information:List[CompanyDataModel] = []
-    for text in invoices_text:
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.0-flash", 
-                contents=f"""Extract company data from this invoice text. 
-                Return ONLY valid JSON with clean string values (no excessive tabs or whitespace):
-                
-                Company name is a name of company that issued the invoice.
-                Invoice ID should be the invoice number/identifier (like "INV-2024-001", "FV/123/2024", etc.)
-                
-                if currency is zł, pln, or zloty, use "PLN" as the currency.
-                if currency is euro, use "EUR" as the currency.
-                if currency is dollar, use "USD" as the currency.
-                if currency is pound, use "GBP" as the currency.
-
-                Do it with each country:
-                For example if country is "Poland", "PL", "POL", "Polska", return "Polska" as the country.
-                The same with other countries, like "Germany", "DE", "GER", "Niemcy" should return "Niemcy", etc....
-                
-                If net_value is not present, but tax_value and gross_value are present, calculate net_value as gross_value-tax_value
-                
-                Make sure you are gathering finall values of net_value, gross_value, tax_value, after corrects.
-
-                When invoice contains both PLN and EUR currencies:
-                - Set currency to "EUR" 
-                - Use PLN values for gross_value, net_value, tax_value
-                - Set euro_net_value to the EUR net amount found in the invoice
-                - If only EUR currency exists, set currency to "EUR" and euro_net_value to 0
-                {text}""",
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": CompanyDataModel,
-                    "temperature": 0.1,
-                },
-            )
-            cleaned_response = clean_json_response(response.text)
-            data_dict = json.loads(cleaned_response)
-
-            # Clean company name if present
-            if 'company_name' in data_dict and isinstance(data_dict['company_name'], str):
-                data_dict['company_name'] = re.sub(r'\s+', ' ', data_dict['company_name']).strip()
-           
-            # Handle Euro currency logic
-            if 'euro_net_value' not in data_dict or data_dict['euro_net_value'] == 0.0:
-                if 'currency' in data_dict and data_dict['currency'] == 'EUR':
-                    data_dict['euro_net_value'] = data_dict.get('net_value', 0.0)
-                else:
-                    # Keep the euro_net_value from AI response if it exists, otherwise set to 0
-                    data_dict['euro_net_value'] = data_dict.get('euro_net_value', 0.0)
+def extract_amounts_from_invoice(invoice_text: str) -> InvoiceAmountsModel:
+    """
+    Extract only financial amounts (net, gross, VAT) and currency from invoice text using AI.
+    """
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", 
+            contents=f"""Extract ONLY the financial amounts from this invoice text. 
+            Return ONLY valid JSON with the amounts:
             
+            - net_value: Net amount (netto) - the amount before tax
+            - gross_value: Gross amount (brutto) - the total amount including tax  
+            - vat_value: VAT/tax amount (podatek VAT) - the tax amount
+            - currency: Currency code (PLN, EUR, USD, GBP, etc.)
+            
+            Currency normalization:
+            - If currency is zł, pln, or zloty, use "PLN"
+            - If currency is euro, use "EUR" 
+            - If currency is dollar, use "USD"
+            - If currency is pound, use "GBP"
+            
+            If net_value is not present but vat_value and gross_value are present, calculate net_value as gross_value - vat_value
+            
+            Focus on the FINAL amounts after any corrections or totals.
+            
+            Invoice text:
+            {invoice_text}""",
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": InvoiceAmountsModel,
+                "temperature": 0.1,
+            },
+        )
+        
+        cleaned_response = clean_json_response(response.text)
+        data_dict = json.loads(cleaned_response)
+        
+        return InvoiceAmountsModel(**data_dict)
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {e}")
+        # Return fallback data
+        return InvoiceAmountsModel(
+            net_value=0.0,
+            gross_value=0.0,
+            vat_value=0.0,
+            currency="PLN"
+        )
+    except Exception as e:
+        print(f"Error extracting amounts: {e}")
+        # Return fallback data  
+        return InvoiceAmountsModel(
+            net_value=0.0,
+            gross_value=0.0,
+            vat_value=0.0,
+            currency="PLN"
+        )
 
-            company_data = CompanyDataModel(**data_dict)
-            gathered_information.append(company_data)
 
+def gather_specific_data(invoice_data: List[Tuple[str, str]]) -> List[CompanyDataModel]:
+    """
+    Process invoice data combining filename parsing with AI content extraction.
     
-        except json.JSONDecodeError as e:
-            # Try to create a default CompanyDataModel with fallback values
-            try:
-                fallback_data = CompanyDataModel(
-                    company_name="Błąd danych",
-                    invoice_id="",
-                    invoice_date="1900-01-01",
-                    gross_value=0.0,
-                    net_value=0.0,
-                    tax_value=0.0,
-                    euro_net_value=0.0,
-                    currency="Brak",
-                    company_country="Brak"
-                )
-                gathered_information.append(fallback_data)
-            except Exception as fallback_error:
-                print(f"Failed to create fallback data: {fallback_error}")
-                
-
+    Args:
+        invoice_data: List of tuples (file_path, extracted_text)
+    
+    Returns:
+        List of CompanyDataModel objects with complete invoice information
+    """
+    gathered_information: List[CompanyDataModel] = []
+    
+    for file_path, invoice_text in invoice_data:
+        try:
+            # Parse filename to get company info
+            filename = os.path.basename(file_path)
+            company_name, invoice_number, topic_number, invoice_type = parse_invoice_filename(filename)
+            
+            # Extract amounts from invoice content using AI
+            amounts = extract_amounts_from_invoice(invoice_text)
+            
+            # Create complete CompanyDataModel
+            company_data = CompanyDataModel(
+                company_name=company_name,
+                invoice_number=invoice_number,
+                topic_number=topic_number,
+                invoice_type=invoice_type,
+                net_value=amounts.net_value,
+                gross_value=amounts.gross_value,
+                vat_value=amounts.vat_value,
+                currency=amounts.currency,
+                filepath=file_path
+            )
+            
+            gathered_information.append(company_data)
+            
+        except ValueError as filename_error:
+            print(f"Error parsing filename {file_path}: {filename_error}")
+            # Create fallback data with error indication
+            fallback_data = CompanyDataModel(
+                company_name=f"Error: {os.path.basename(file_path)}",
+                invoice_number="N/A",
+                topic_number="N/A",
+                invoice_type=None,
+                net_value=0.0,
+                gross_value=0.0,
+                vat_value=0.0,
+                currency="PLN",
+                filepath=file_path
+            )
+            gathered_information.append(fallback_data)
+            
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            # Create fallback data
+            fallback_data = CompanyDataModel(
+                company_name=f"Error: {os.path.basename(file_path)}",
+                invoice_number="N/A", 
+                topic_number="N/A",
+                invoice_type=None,
+                net_value=0.0,
+                gross_value=0.0,
+                vat_value=0.0,
+                currency="PLN",
+                filepath=file_path
+            )
+            gathered_information.append(fallback_data)
+    
     return gathered_information
